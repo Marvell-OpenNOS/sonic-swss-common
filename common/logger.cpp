@@ -11,7 +11,6 @@
 #include "schema.h"
 #include "select.h"
 #include "dbconnector.h"
-#include "redisclient.h"
 #include "consumerstatetable.h"
 #include "producerstatetable.h"
 
@@ -34,7 +33,8 @@ void err_exit(const char *fn, int ln, int e, const char *fmt, ...)
 
 Logger::~Logger() {
     if (m_settingThread) {
-        m_settingThread->detach();
+        terminateSettingThread = true;
+        m_settingThread->join();
     }
 }
 
@@ -92,14 +92,13 @@ void Logger::linkToDbWithOutput(const std::string &dbName, const PriorityChangeN
     // Initialize internal DB with observer
     logger.m_settingChangeObservers.insert(std::make_pair(dbName, std::make_pair(prioNotify, outputNotify)));
     DBConnector db("LOGLEVEL_DB", 0);
-    RedisClient redisClient(&db);
-    auto keys = redisClient.keys("*");
+    auto keys = db.keys("*");
 
     std::string key = dbName + ":" + dbName;
     std::string prio, output;
     bool doUpdate = false;
-    auto prioPtr = redisClient.hget(key, DAEMON_LOGLEVEL);
-    auto outputPtr = redisClient.hget(key, DAEMON_LOGOUTPUT);
+    auto prioPtr = db.hget(key, DAEMON_LOGLEVEL);
+    auto outputPtr = db.hget(key, DAEMON_LOGOUTPUT);
 
     if ( prioPtr == nullptr )
     {
@@ -166,13 +165,13 @@ Logger::Priority Logger::getMinPrio()
     return getInstance().m_minPrio;
 }
 
-[[ noreturn ]] void Logger::settingThread()
+void Logger::settingThread()
 {
     Select select;
     DBConnector db("LOGLEVEL_DB", 0);
     std::map<std::string, std::shared_ptr<ConsumerStateTable>> selectables;
 
-    while (true)
+    while (!terminateSettingThread)
     {
         if (selectables.size() < m_settingChangeObservers.size())
         {
@@ -201,7 +200,7 @@ Logger::Priority Logger::getMinPrio()
 
         if (ret == Select::TIMEOUT)
         {
-            SWSS_LOG_INFO("%s select timeout", __PRETTY_FUNCTION__);
+            SWSS_LOG_DEBUG("%s select timeout", __PRETTY_FUNCTION__);
             continue;
         }
 

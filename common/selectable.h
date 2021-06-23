@@ -20,7 +20,7 @@ public:
     /* return file handler for the Selectable */
     virtual int getFd() = 0;
 
-    /* Read all data from the fd assicaited with Selectable */
+    /* Read all data from the fd associated with Selectable */
     virtual uint64_t readData() = 0;
 
     /*
@@ -56,16 +56,6 @@ public:
     virtual int getPri() const
     {
         return m_priority;
-    }
-
-    virtual int getDbConnectorId()
-    {
-        return 0;
-    }
-
-    virtual std::string getDbNamespace()
-    {
-        return std::string();
     }
 
 private:
